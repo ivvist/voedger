@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+const bitsInFourBytes = 32
+
 func (v TValue) Len() int {
 	return int(hostValueLength(uint64(v)))
 }
@@ -107,4 +109,9 @@ func decodeString(value uint64) (ret string) {
 	u := uintptr(uint32(value >> 32))
 	s := uint32(value)
 	return unsafe.String((*byte)(unsafe.Pointer(u)), s)
+}
+
+func decodeStr(ptr, size uint32) (ret string) {
+	ptr64 := uint64((uint64(ptr) << uint64(bitsInFourBytes)) | uint64(size))
+	return decodeString(ptr64)
 }

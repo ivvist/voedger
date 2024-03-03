@@ -70,10 +70,11 @@ type IRowWriter interface {
 	PutBool(name string, value bool)
 }
 
-type IKeyBuilder interface {
-	IRowWriter
-}
-
+/*
+	type IKeyBuilder interface {
+		IRowWriter
+	}
+*/
 type IIntent interface {
 	IRowWriter
 }
