@@ -69,10 +69,7 @@ func hostGetKey(storagePtr, storageSize, entityPtr, entitySize uint32) uint64 {
 	var storage appdef.QName
 	var entity appdef.QName
 	var err error
-	storage, err = appdef.ParseQName(decodeStr(storagePtr, storageSize))
-	if err != nil {
-		panic(err)
-	}
+	storage = mockEngine.parseQname(decodeStr(storagePtr, storageSize))
 	entitystr := decodeStr(entityPtr, entitySize)
 	if entitystr != "" {
 		entity, err = appdef.ParseQName(entitystr)

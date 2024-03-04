@@ -8,6 +8,9 @@
 package exttinygo
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -87,6 +90,10 @@ type mockExtEngine struct {
 	io TExtensionIO // mockExtension
 }
 
+func errUndefinedPackage(name string) error {
+	return errors.New("undefined package: " + name)
+}
+
 var mockEngine *mockExtEngine
 
 // InitTest - call before testing
@@ -100,6 +107,23 @@ func InitTest(t *testing.T) {
 	mockEngine.errs = make([]string, 0, errCapacity)
 
 	mockEngine.io = TExtensionIO{}
+}
+
+func (f *mockExtEngine) parseQname(value string) (qname appdef.QName) {
+
+	pos := strings.LastIndex(value, ".")
+	if pos == -1 {
+		panic(fmt.Errorf("%w: %v", appdef.ErrInvalidQNameStringRepresentation, value))
+	}
+
+	packageFullPath := value[:pos]
+	entityName := value[pos+1:]
+	localName := f.io.PackageLocalName(packageFullPath)
+	if localName == "" {
+		panic(errUndefinedPackage(packageFullPath))
+	}
+
+	return appdef.NewQName(localName, entityName)
 }
 
 func (f *mockExtEngine) getWriterArgs(id uint64, typ uint32, namePtr uint32, nameSize uint32) (writer istructs.IRowWriter, name string) {

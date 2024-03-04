@@ -5,9 +5,14 @@
 
 package exttest
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/voedger/exttinygo"
+)
 
 func InitTest(t *testing.T) {
+	exttinygo.InitTest(t)
 }
 
 func CommitIntentsToState() {
