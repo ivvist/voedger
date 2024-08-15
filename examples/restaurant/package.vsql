@@ -17,15 +17,6 @@ ABSTRACT TABLE BOEntity INHERITS CDoc(
     Number int NOT NULL -- Number sequence(1) ??? smm
 ) WITH Tags=(BackofficeTag);
 
--- TABLE Person : is an Abstract data struct for Waiters, Clients, Adminitsrators, Manager
-ABSTRACT TABLE Person INHERITS BOEntity (
-    Address varchar(50), 
-    Email varchar(50) CHECK '^\\S+@\\S+\\.\\S+$',
-    Phone varchar(20),
-    Picture blob
-    --TODO ref. to Waiter subject
-) WITH Tags=(BackofficeTag);
-
 WORKSPACE Restaurant (
     USE TABLE sys.*;
     DESCRIPTOR RestaurantDescriptor(
@@ -40,27 +31,11 @@ WORKSPACE Restaurant (
     ROLE LocationUser;
     ROLE LocationManager;
 
-    -- CDOC data schemes
-
-    -- TABLE Client   : describes restaurant client entity
-    TABLE Client INHERITS Person(
-        -- access to alcohol
-        Datebirth int64, 
-        -- payment card number, used for payments in Restaurant
-        Card varchar(20),
-        -- percent of permanent discount
-        DiscountPercent int 
-    );
-
-    -- TABLE Position   : Restaurant job list
-    TABLE Position INHERITS BOEntity(
-    );
-
     -- TABLE POSUser   : describes restaurant user entity (Waiter/Administrator/Manager)
-    TABLE POSUser INHERITS Person(
+    TABLE POSUser INHERITS sys.user(
         -- personal code in inner login system    
         Code varchar(20), 
-        PositionID ref(Position),
+        Position  varchar(50), 
         -- wage/salary rate
         Wage float32
     );
@@ -123,7 +98,7 @@ WORKSPACE Restaurant (
         Client ref(Client) NOT NULL 
     ) WITH Tags=(PosTag);
 
-    -- TABLE Orders     : defines parameters of order on table. One visit can have several orders
+    -- TABLE Order     : defines parameters of order on table. One visit can have several orders
     TABLE Order INHERITS ODoc(
         VisitID ref(Visit) NOT NULL, 
         -- time of creating order
@@ -161,16 +136,29 @@ WORKSPACE Restaurant (
         PaymentTypeID ref(PaymentType) NOT NULL,
         -- amount of payment
         Amount currency
-        BillPayment TABLE BillPayment (
-            Payment ref(Bill) NOT NULL,
+        PaymentItem TABLE PaymentItem (
+            PaymentID ref(Payment) NOT NULL,
             ArticleID ref(Article), 
-            Quantity int,           
-            Comment varchar(250),
             Price currency,
             VatPercent currency,
-            Vat float32
+            Quantity int           
         )
     ) WITH Tags=(PosTag);
+
+	VIEW SalesMetrics (
+		Year int32 NOT NULL,
+		Month int32 NOT NULL,
+		Day int32 NOT NULL,
+		MetricType int32 NOT NULL,
+		Classifier ref NOT NULL,
+		Waiter ref NOT NULL,
+		Hour int32 NOT NULL,
+		Sum float64,
+		Count float64,
+		AggEx float64,
+		offs int64,
+		PRIMARY KEY ((Year, Month), Day, MetricType, Classifier, Waiter, Hour)
+	) AS RESULT OF ApplySalesMetrics;
 
 	EXTENSION ENGINE BUILTIN (
         COMMAND Orders(untill.orders);
@@ -179,35 +167,9 @@ WORKSPACE Restaurant (
 	);
 
     TYPE CmdPaymentResult (
- 	Number int32 NOT NULL
+ 	   Number int32 NOT NULL
     );
 
-    EXTENSION ENGINE BUILTIN (
-        COMMAND MakeOrder(Order); ??
-        COMMAND MakePayment(Payment) RETURNS CmdPaymentResult; ??
-    );
-
-    EXTENSION ENGINE WASM (
-
-	    SYNC PROJECTOR UpdateTableStatus
-            AFTER INSERT ON Visit OR
-	        AFTER EXECUTE WITH PARAM ON (Order, Payment)
-		INTENTS(View(TableStatus));
-
-	    PROJECTOR UpdateSalesReport
-            AFTER INSERT ON Visit OR 
-	        AFTER EXECUTE WITH PARAM ON Payment
-		INTENTS(View(SalesPerDay));
-
-    );
-
--- ACLs
-    GRANT ALL ON ALL TABLES WITH TAG BackofficeTag TO LocationManager;
-    -- GRANT INSERT,UPDATE ON ALL TABLES WITH TAG sys.ODoc TO LocationUser;
-    GRANT SELECT ON TABLE Order TO LocationUser;
-    -- GRANT EXECUTE ON COMMAND MakeOrder TO LocationUser;
-    -- GRANT EXECUTE ON COMMAND MakePayment TO LocationUser;
-    GRANT SELECT ON ALL QUERIES WITH TAG PosTag TO LocationUser;
 
     -- VIEW TableStatus     : keeps actual status of table(free/occupied)
     VIEW TableStatus (
@@ -217,20 +179,54 @@ WORKSPACE Restaurant (
         PRIMARY KEY (TableNumber)
     ) AS RESULT OF UpdateTableStatus;
 
-    -- VIEW SalesPerDay     : sales report per day
-    VIEW SalesPerDay(
-        Year int32,
-        Month int32, 
-        Day int32, 
-        Number int32, 
-        DepartmentID ref(Department) NOT NULL,
-        ArticleID ref(Article) NOT NULL,
-        Quantity int32, --!!! Must be float32
-        Amount int32,--!!! Must be Currency
-        Vat int32, --!!! Must be float32
-        VatPercent int32, --!!! Must be Currency
-        PaymentTypeID ref(PaymentType) NOT NULL,
-        PRIMARY KEY ((Year, Month, Day), Number)
-    ) AS RESULT OF UpdateSalesReport;
+
+	TYPE GetSalesMetricsParams (
+		Period text NOT NULL
+	);
+
+	TYPE GetSalesMetricsResult (
+		Year int32 NOT NULL,
+		Month int32 NOT NULL,
+		Day int32 NOT NULL,
+		MetricType int32 NOT NULL,
+		Classifier ref NOT NULL,
+		Waiter ref(POSUser)NOT NULL,
+		Hour int32 NOT NULL,
+		Sum float64 NOT NULL,
+		Count float64 NOT NULL,
+		AggEx float64 NOT NULL
+	);
+
+    EXTENSION ENGINE WASM (
+
+        COMMAND MakeOrder(Order);
+        COMMAND MakePayment(Payment) RETURNS CmdPaymentResult;
+
+        -- table status
+
+	    PROJECTOR UpdateTableStatus
+            AFTER INSERT ON Visit OR
+	        AFTER EXECUTE WITH PARAM ON (Order, Payment)
+		INTENTS(View(TableStatus));
+
+		-- salesmetrics
+
+		PROJECTOR ApplySalesMetrics AFTER EXECUTE ON (Order, Payment) INTENTS (View(SalesMetrics));
+
+		--salesmetrics
+
+		QUERY GetSalesMetrics(GetSalesMetricsParams) RETURNS GetSalesMetricsResult WITH Tags=(PosTag);
+
+    );
+
+-- ACLs
+    GRANT ALL ON ALL TABLES WITH TAG BackofficeTag TO LocationManager;
+    -- GRANT INSERT,UPDATE ON ALL TABLES WITH TAG sys.ODoc TO LocationUser;
+    GRANT SELECT ON TABLE Order TO LocationUser;
+    -- GRANT EXECUTE ON COMMAND MakeOrder TO LocationUser;
+    -- GRANT EXECUTE ON COMMAND MakePayment TO LocationUser;
+    -- GRANT EXECUTE ON COMMAND ApplySalesMetrics TO LocationUser;
+    GRANT SELECT ON ALL QUERIES WITH TAG PosTag TO LocationUser;
+
 );    
 
