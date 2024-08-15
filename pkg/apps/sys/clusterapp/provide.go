@@ -13,8 +13,7 @@ import (
 	"github.com/voedger/voedger/pkg/istructs"
 	"github.com/voedger/voedger/pkg/istructsmem"
 	"github.com/voedger/voedger/pkg/parser"
-	"github.com/voedger/voedger/pkg/sys"
-	"github.com/voedger/voedger/pkg/sys/smtp"
+	"github.com/voedger/voedger/pkg/sys/sysprovide"
 )
 
 func Provide() apps.AppBuilder {
@@ -23,15 +22,15 @@ func Provide() apps.AppBuilder {
 			Path: ClusterAppFQN,
 			FS:   schemaFS,
 		}
-		clusterPackageFS := cluster.Provide(cfg, apis.IAppStructsProvider, apis.TimeFunc, apis.IFederation, apis.ITokens)
-		sysPackageFS := sys.Provide(cfg, smtp.Cfg{}, ep, nil, apis.TimeFunc, apis.ITokens, apis.IFederation, apis.IAppStructsProvider, apis.IAppTokensFactory,
-			nil, apis.IAppStorageProvider)
+		clusterPackageFS := cluster.Provide(cfg, apis.IAppStructsProvider, apis.TimeFunc, apis.IFederation,
+			apis.ITokens, apis.SidecarApps)
+		sysPackageFS := sysprovide.Provide(cfg)
 		return apps.BuiltInAppDef{
 			AppQName: istructs.AppQName_sys_cluster,
 			Packages: []parser.PackageFS{clusterAppPackageFS, clusterPackageFS, sysPackageFS},
 			AppDeploymentDescriptor: appparts.AppDeploymentDescriptor{
 				NumParts:         ClusterAppNumPartitions,
-				EnginePoolSize:   appparts.PoolSize(int(ClusterAppNumPartitions), 1, int(ClusterAppNumPartitions)),
+				EnginePoolSize:   appparts.PoolSize(int(ClusterAppNumPartitions), 1, int(ClusterAppNumPartitions), 1),
 				NumAppWorkspaces: ClusterAppNumAppWS,
 			},
 		}

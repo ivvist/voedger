@@ -23,6 +23,7 @@ import (
 	ibus "github.com/voedger/voedger/staging/src/github.com/untillpro/airs-ibus"
 
 	"github.com/voedger/voedger/pkg/appdef"
+	"github.com/voedger/voedger/pkg/goutils/logger"
 	"github.com/voedger/voedger/pkg/iblobstorage"
 	"github.com/voedger/voedger/pkg/iprocbus"
 	"github.com/voedger/voedger/pkg/istructs"
@@ -70,18 +71,18 @@ func blobReadMessageHandler(bbm blobBaseMessage, blobReadDetails blobReadDetails
 		Method:   ibus.HTTPMethodPOST,
 		WSID:     int64(bbm.wsid),
 		AppQName: bbm.appQName.String(),
-		Resource: "c.sys.DownloadBLOBHelper",
+		Resource: "q.sys.DownloadBLOBAuthnz",
 		Header:   bbm.header,
 		Body:     []byte(`{}`),
 		Host:     localhost,
 	}
 	blobHelperResp, _, _, err := bus.SendRequest2(bbm.req.Context(), req, busTimeout)
 	if err != nil {
-		WriteTextResponse(bbm.resp, "failed to exec c.sys.DownloadBLOBHelper: "+err.Error(), http.StatusInternalServerError)
+		WriteTextResponse(bbm.resp, "failed to exec q.sys.DownloadBLOBAuthnz: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if blobHelperResp.StatusCode != http.StatusOK {
-		WriteTextResponse(bbm.resp, "c.sys.DownloadBLOBHelper returned error: "+string(blobHelperResp.Data), blobHelperResp.StatusCode)
+		WriteTextResponse(bbm.resp, "q.sys.DownloadBLOBAuthnz returned error: "+string(blobHelperResp.Data), blobHelperResp.StatusCode)
 		return
 	}
 
@@ -104,6 +105,7 @@ func blobReadMessageHandler(bbm blobBaseMessage, blobReadDetails blobReadDetails
 		return nil
 	}
 	if err := blobStorage.ReadBLOB(bbm.req.Context(), key, stateWriterDiscard, bbm.resp); err != nil {
+		logger.Error(fmt.Sprintf("failed to read or send BLOB: id %d, appQName %s, wsid %d: %s", blobReadDetails.blobID, bbm.appQName, bbm.wsid, err.Error()))
 		if errors.Is(err, iblobstorage.ErrBLOBNotFound) {
 			WriteTextResponse(bbm.resp, err.Error(), http.StatusNotFound)
 			return
@@ -199,7 +201,7 @@ func blobWriteMessageHandlerMultipart(bbm blobBaseMessage, blobStorage iblobstor
 			}
 			break
 		}
-		contentDisposition := part.Header.Get("Content-Disposition")
+		contentDisposition := part.Header.Get(coreutils.ContentDisposition)
 		mediaType, params, err := mime.ParseMediaType(contentDisposition)
 		if err != nil {
 			WriteTextResponse(bbm.resp, fmt.Sprintf("failed to parse Content-Disposition of part number %d: %s", partNum, contentDisposition), http.StatusBadRequest)
@@ -209,7 +211,7 @@ func blobWriteMessageHandlerMultipart(bbm blobBaseMessage, blobStorage iblobstor
 		}
 		contentType := part.Header.Get(coreutils.ContentType)
 		if len(contentType) == 0 {
-			contentType = "application/x-binary"
+			contentType = coreutils.ApplicationXBinary
 		}
 		part.Header[coreutils.Authorization] = bbm.header[coreutils.Authorization] // add auth header for c.sys.*BLOBHelper
 		blobID := writeBLOB(bbm.req.Context(), int64(bbm.wsid), bbm.appQName.String(), part.Header, bbm.resp,
@@ -259,8 +261,7 @@ func (s *httpService) blobRequestHandler(resp http.ResponseWriter, req *http.Req
 	vars := mux.Vars(req)
 	wsid, err := strconv.ParseInt(vars[WSID], parseInt64Base, parseInt64Bits)
 	if err != nil {
-		// impossible, checked by router url rule
-		// notest
+		// notest: checked by router url rule
 		panic(err)
 	}
 	mes := blobMessage{
@@ -276,12 +277,18 @@ func (s *httpService) blobRequestHandler(resp http.ResponseWriter, req *http.Req
 		blobDetails: details,
 	}
 	if _, ok := mes.blobBaseMessage.header[coreutils.Authorization]; !ok {
-		if cookie, err := req.Cookie(coreutils.Authorization); err == nil {
-			if val, err := url.QueryUnescape(cookie.Value); err == nil {
-				// authorization token in cookies -> c.sys.DownloadBLOBHelper requires it in headers
-				mes.blobBaseMessage.header[coreutils.Authorization] = []string{val}
-			}
+		cookie, err := req.Cookie(coreutils.Authorization)
+		if err != nil && !errors.Is(err, http.ErrNoCookie) {
+			// notest
+			panic(err)
 		}
+		val, err := url.QueryUnescape(cookie.Value)
+		if err != nil {
+			// notest
+			panic(err)
+		}
+		// authorization token in cookies -> q.sys.DownloadBLOBAuthnz requires it in headers
+		mes.blobBaseMessage.header[coreutils.Authorization] = []string{val}
 	}
 	if !s.BlobberParams.procBus.Submit(0, 0, mes) {
 		resp.WriteHeader(http.StatusServiceUnavailable)
@@ -296,8 +303,7 @@ func (s *httpService) blobReadRequestHandler() http.HandlerFunc {
 		vars := mux.Vars(req)
 		blobID, err := strconv.ParseInt(vars[blobID], parseInt64Base, parseInt64Bits)
 		if err != nil {
-			// impossible, checked by router url rule
-			// notest
+			// notest: checked by router url rule
 			panic(err)
 		}
 		principalToken := headerOrCookieAuth(resp, req)

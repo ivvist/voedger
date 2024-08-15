@@ -31,7 +31,7 @@ import (
 	imetrics "github.com/voedger/voedger/pkg/metrics"
 	"github.com/voedger/voedger/pkg/pipeline"
 	"github.com/voedger/voedger/pkg/processors"
-	"github.com/voedger/voedger/pkg/state"
+	"github.com/voedger/voedger/pkg/sys"
 	"github.com/voedger/voedger/pkg/sys/authnz"
 	coreutils "github.com/voedger/voedger/pkg/utils"
 	"github.com/voedger/voedger/pkg/vvm/engines"
@@ -44,7 +44,7 @@ var timeFunc = coreutils.TimeFunc(func() time.Time { return now })
 
 var (
 	appName    appdef.AppQName           = istructs.AppQName_test1_app1
-	appEngines                           = appparts.PoolSize(10, 100, 10)
+	appEngines                           = appparts.PoolSize(10, 100, 10, 0)
 	partCount  istructs.NumAppPartitions = 10
 	partID     istructs.PartitionID      = 5
 	wsID       istructs.WSID             = 15
@@ -72,7 +72,7 @@ func TestBasicUsage_RowsProcessorFactory(t *testing.T) {
 	skb.On("PutRecordID", mock.Anything, mock.Anything)
 	s := &mockState{}
 	s.
-		On("KeyBuilder", state.Record, appdef.NullQName).Return(skb).
+		On("KeyBuilder", sys.Storage_Record, appdef.NullQName).Return(skb).
 		On("MustExist", mock.Anything).Return(department("Soft drinks")).Once().
 		On("MustExist", mock.Anything).Return(department("Alcohol drinks")).Once().
 		On("MustExist", mock.Anything).Return(department("Alcohol drinks")).Once().
@@ -162,7 +162,8 @@ func TestBasicUsage_RowsProcessorFactory(t *testing.T) {
 
 func deployTestAppWithSecretToken(require *require.Assertions,
 	prepareAppDef func(appdef.IAppDefBuilder, appdef.IWorkspaceBuilder),
-	cfgFunc ...func(*istructsmem.AppConfigType)) (appParts appparts.IAppPartitions, cleanup func(), appTokens istructs.IAppTokens) {
+	cfgFunc ...func(*istructsmem.AppConfigType)) (appParts appparts.IAppPartitions, cleanup func(),
+	appTokens istructs.IAppTokens, statelessResources istructsmem.IStatelessResources) {
 	cfgs := make(istructsmem.AppConfigsType)
 	asf := mem.Provide()
 	storageProvider := istorageimpl.Provide(asf)
@@ -210,6 +211,7 @@ func deployTestAppWithSecretToken(require *require.Assertions,
 		prepareAppDef(adb, wsb)
 	}
 
+	statelessResources = istructsmem.NewStatelessResources()
 	cfg := cfgs.AddBuiltInAppConfig(appName, adb)
 	cfg.SetNumAppWorkspaces(istructs.DefaultNumAppWorkspaces)
 
@@ -319,21 +321,23 @@ func deployTestAppWithSecretToken(require *require.Assertions,
 	require.NoError(as.Records().Apply(pLogEvent))
 	require.NoError(as.Events().PutWlog(pLogEvent))
 
-	appParts, cleanup, err = appparts.New2(asp,
+	appParts, cleanup, err = appparts.New2(context.Background(), asp,
 		func(istructs.IAppStructs, istructs.PartitionID) pipeline.ISyncOperator { return &pipeline.NOOP{} }, // no projectors
-		appparts.NullActualizers,
+		appparts.NullProcessorRunner,
+		appparts.NullProcessorRunner,
 		engines.ProvideExtEngineFactories(
 			engines.ExtEngineFactoriesConfig{
-				AppConfigs: cfgs,
-				WASMConfig: iextengine.WASMFactoryConfig{Compile: false},
+				AppConfigs:         cfgs,
+				StatelessResources: statelessResources,
+				WASMConfig:         iextengine.WASMFactoryConfig{Compile: false},
 			}))
 	require.NoError(err)
-	appParts.DeployApp(appName, appDef, partCount, appEngines)
+	appParts.DeployApp(appName, nil, appDef, partCount, appEngines, cfg.NumAppWorkspaces())
 	appParts.DeployAppPartitions(appName, []istructs.PartitionID{partID})
 
 	appTokens = atf.New(appName)
 
-	return appParts, cleanup, appTokens
+	return appParts, cleanup, appTokens, statelessResources
 }
 
 func TestBasicUsage_ServiceFactory(t *testing.T) {
@@ -371,7 +375,7 @@ func TestBasicUsage_ServiceFactory(t *testing.T) {
 	metrics := imetrics.Provide()
 	metricNames := make([]string, 0)
 
-	appParts, cleanAppParts, appTokens := deployTestAppWithSecretToken(require, nil)
+	appParts, cleanAppParts, appTokens, statelessResources := deployTestAppWithSecretToken(require, nil)
 	defer cleanAppParts()
 
 	authn := iauthnzimpl.NewDefaultAuthenticator(iauthnzimpl.TestSubjectRolesGetter, iauthnzimpl.TestIsDeviceAllowedFuncs)
@@ -381,7 +385,7 @@ func TestBasicUsage_ServiceFactory(t *testing.T) {
 		func(ctx context.Context, sender ibus.ISender) IResultSenderClosable { return rs },
 		appParts,
 		3, // max concurrent queries
-		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil)
+		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil, statelessResources)
 	processorCtx, processorCtxCancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -1109,7 +1113,7 @@ func TestRateLimiter(t *testing.T) {
 	qNameMyFuncParams := appdef.NewQName(appdef.SysPackage, "myFuncParams")
 	qNameMyFuncResults := appdef.NewQName(appdef.SysPackage, "results")
 	qName := appdef.NewQName(appdef.SysPackage, "myFunc")
-	appParts, cleanAppParts, appTokens := deployTestAppWithSecretToken(require,
+	appParts, cleanAppParts, appTokens, statelessResources := deployTestAppWithSecretToken(require,
 		func(appDef appdef.IAppDefBuilder, wsb appdef.IWorkspaceBuilder) {
 			appDef.AddObject(qNameMyFuncParams)
 			appDef.AddObject(qNameMyFuncResults).
@@ -1142,7 +1146,7 @@ func TestRateLimiter(t *testing.T) {
 		func(ctx context.Context, sender ibus.ISender) IResultSenderClosable { return rs },
 		appParts,
 		3, // max concurrent queries
-		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil)
+		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil, statelessResources)
 	go queryProcessor.Run(context.Background())
 
 	systemToken := getSystemToken(appTokens)
@@ -1181,7 +1185,7 @@ func TestAuthnz(t *testing.T) {
 
 	metrics := imetrics.Provide()
 
-	appParts, cleanAppParts, appTokens := deployTestAppWithSecretToken(require, nil)
+	appParts, cleanAppParts, appTokens, statelessResources := deployTestAppWithSecretToken(require, nil)
 	defer cleanAppParts()
 
 	authn := iauthnzimpl.NewDefaultAuthenticator(iauthnzimpl.TestSubjectRolesGetter, iauthnzimpl.TestIsDeviceAllowedFuncs)
@@ -1191,7 +1195,7 @@ func TestAuthnz(t *testing.T) {
 		func(ctx context.Context, sender ibus.ISender) IResultSenderClosable { return rs },
 		appParts,
 		3, // max concurrent queries
-		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil)
+		metrics, "vvm", authn, authz, itokensjwt.TestTokensJWT(), nil, statelessResources)
 	go queryProcessor.Run(context.Background())
 
 	t.Run("no token for a query that requires authorization -> 403 unauthorized", func(t *testing.T) {

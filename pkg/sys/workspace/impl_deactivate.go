@@ -15,7 +15,7 @@ import (
 	"github.com/voedger/voedger/pkg/istructsmem"
 	"github.com/voedger/voedger/pkg/itokens"
 	payloads "github.com/voedger/voedger/pkg/itokens-payloads"
-	"github.com/voedger/voedger/pkg/state"
+	"github.com/voedger/voedger/pkg/sys"
 	"github.com/voedger/voedger/pkg/sys/authnz"
 	"github.com/voedger/voedger/pkg/sys/collection"
 	"github.com/voedger/voedger/pkg/sys/invite"
@@ -23,50 +23,52 @@ import (
 	"github.com/voedger/voedger/pkg/utils/federation"
 )
 
-func provideDeactivateWorkspace(cfg *istructsmem.AppConfigType, tokensAPI itokens.ITokens, federation federation.IFederation) {
+func provideDeactivateWorkspace(sr istructsmem.IStatelessResources, tokensAPI itokens.ITokens, federation federation.IFederation) {
 
-	// c.sys.DeactivateWorkspace
+	sr.AddCommands(appdef.SysPackagePath,
+		// c.sys.DeactivateWorkspace
+		// target app, target WSID
+		istructsmem.NewCommandFunction(
+			qNameCmdInitiateDeactivateWorkspace,
+			cmdInitiateDeactivateWorkspaceExec,
+		),
+
+		// c.sys.OnWorkspaceDeactivated
+		// owner app, owner WSID
+		istructsmem.NewCommandFunction(
+			appdef.NewQName(appdef.SysPackage, "OnWorkspaceDeactivated"),
+			cmdOnWorkspaceDeactivatedExec,
+		),
+
+		// c.sys.OnJoinedWorkspaceDeactivated
+		// target app, profile WSID
+		istructsmem.NewCommandFunction(
+			appdef.NewQName(appdef.SysPackage, "OnJoinedWorkspaceDeactivated"),
+			cmdOnJoinedWorkspaceDeactivateExec,
+		),
+
+		// c.sys.OnChildWorkspaceDeactivated
+		// ownerApp/ownerWSID
+		istructsmem.NewCommandFunction(
+			appdef.NewQName(appdef.SysPackage, "OnChildWorkspaceDeactivated"),
+			cmdOnChildWorkspaceDeactivatedExec,
+		),
+	)
+
 	// target app, target WSID
-	cfg.Resources.Add(istructsmem.NewCommandFunction(
-		qNameCmdInitiateDeactivateWorkspace,
-		cmdInitiateDeactivateWorkspaceExec,
-	))
-
-	// c.sys.OnWorkspaceDeactivated
-	// owner app, owner WSID
-	cfg.Resources.Add(istructsmem.NewCommandFunction(
-		appdef.NewQName(appdef.SysPackage, "OnWorkspaceDeactivated"),
-		cmdOnWorkspaceDeactivatedExec,
-	))
-
-	// c.sys.OnJoinedWorkspaceDeactivated
-	// target app, profile WSID
-	cfg.Resources.Add(istructsmem.NewCommandFunction(
-		appdef.NewQName(appdef.SysPackage, "OnJoinedWorkspaceDeactivated"),
-		cmdOnJoinedWorkspaceDeactivateExec,
-	))
-
-	// c.sys.OnChildWorkspaceDeactivated
-	// ownerApp/ownerWSID
-	cfg.Resources.Add(istructsmem.NewCommandFunction(
-		appdef.NewQName(appdef.SysPackage, "OnChildWorkspaceDeactivated"),
-		cmdOnChildWorkspaceDeactivatedExec,
-	))
-
-	// target app, target WSID
-	cfg.AddAsyncProjectors(istructs.Projector{
+	sr.AddProjectors(appdef.SysPackagePath, istructs.Projector{
 		Name: qNameProjectorApplyDeactivateWorkspace,
 		Func: projectorApplyDeactivateWorkspace(federation, tokensAPI),
 	})
 }
 
 func cmdInitiateDeactivateWorkspaceExec(args istructs.ExecCommandArgs) (err error) {
-	kb, err := args.State.KeyBuilder(state.Record, authnz.QNameCDocWorkspaceDescriptor)
+	kb, err := args.State.KeyBuilder(sys.Storage_Record, authnz.QNameCDocWorkspaceDescriptor)
 	if err != nil {
 		// notest
 		return err
 	}
-	kb.PutQName(state.Field_Singleton, authnz.QNameCDocWorkspaceDescriptor)
+	kb.PutQName(sys.Storage_Record_Field_Singleton, authnz.QNameCDocWorkspaceDescriptor)
 	wsDesc, err := args.State.MustExist(kb)
 	if err != nil {
 		// notest
@@ -108,7 +110,7 @@ func cmdOnJoinedWorkspaceDeactivateExec(args istructs.ExecCommandArgs) (err erro
 func cmdOnWorkspaceDeactivatedExec(args istructs.ExecCommandArgs) (err error) {
 	ownerWSID := args.ArgumentObject.AsInt64(Field_OwnerWSID)
 	wsName := args.ArgumentObject.AsString(authnz.Field_WSName)
-	kb, err := args.State.KeyBuilder(state.View, QNameViewWorkspaceIDIdx)
+	kb, err := args.State.KeyBuilder(sys.Storage_View, QNameViewWorkspaceIDIdx)
 	if err != nil {
 		// notest
 		return err
@@ -125,12 +127,12 @@ func cmdOnWorkspaceDeactivatedExec(args istructs.ExecCommandArgs) (err error) {
 		return
 	}
 	idOfCDocWorkspaceID := viewRec.AsRecordID(field_IDOfCDocWorkspaceID)
-	kb, err = args.State.KeyBuilder(state.Record, QNameCDocWorkspaceID)
+	kb, err = args.State.KeyBuilder(sys.Storage_Record, QNameCDocWorkspaceID)
 	if err != nil {
 		// notest
 		return err
 	}
-	kb.PutRecordID(state.Field_ID, idOfCDocWorkspaceID)
+	kb.PutRecordID(sys.Storage_Record_Field_ID, idOfCDocWorkspaceID)
 	cdocWorkspaceID, err := args.State.MustExist(kb)
 	if err != nil {
 		// notest
@@ -154,12 +156,12 @@ func cmdOnWorkspaceDeactivatedExec(args istructs.ExecCommandArgs) (err error) {
 // ownerApp/ownerWSID
 func cmdOnChildWorkspaceDeactivatedExec(args istructs.ExecCommandArgs) (err error) {
 	ownerID := args.ArgumentObject.AsInt64(Field_OwnerID)
-	kb, err := args.State.KeyBuilder(state.Record, appdef.NullQName)
+	kb, err := args.State.KeyBuilder(sys.Storage_Record, appdef.NullQName)
 	if err != nil {
 		// notest
 		return err
 	}
-	kb.PutRecordID(state.Field_ID, istructs.RecordID(ownerID))
+	kb.PutRecordID(sys.Storage_Record_Field_ID, istructs.RecordID(ownerID))
 	cdocOwnerSV, err := args.State.MustExist(kb)
 	if err != nil {
 		// notest
@@ -180,12 +182,12 @@ func cmdOnChildWorkspaceDeactivatedExec(args istructs.ExecCommandArgs) (err erro
 // target app, target WSID
 func projectorApplyDeactivateWorkspace(federation federation.IFederation, tokensAPI itokens.ITokens) func(event istructs.IPLogEvent, s istructs.IState, intents istructs.IIntents) (err error) {
 	return func(event istructs.IPLogEvent, s istructs.IState, intents istructs.IIntents) (err error) {
-		kb, err := s.KeyBuilder(state.Record, authnz.QNameCDocWorkspaceDescriptor)
+		kb, err := s.KeyBuilder(sys.Storage_Record, authnz.QNameCDocWorkspaceDescriptor)
 		if err != nil {
 			// notest
 			return err
 		}
-		kb.PutQName(state.Field_Singleton, authnz.QNameCDocWorkspaceDescriptor)
+		kb.PutQName(sys.Storage_Record_Field_Singleton, authnz.QNameCDocWorkspaceDescriptor)
 		wsDesc, err := s.MustExist(kb)
 		if err != nil {
 			// notest
@@ -204,7 +206,7 @@ func projectorApplyDeactivateWorkspace(federation federation.IFederation, tokens
 		}
 
 		// Foreach cdoc.sys.Subject
-		subjectsKB, err := s.KeyBuilder(state.View, collection.QNameCollectionView)
+		subjectsKB, err := s.KeyBuilder(sys.Storage_View, collection.QNameCollectionView)
 		if err != nil {
 			// notest
 			return err

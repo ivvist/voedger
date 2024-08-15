@@ -11,14 +11,12 @@ import (
 	"github.com/voedger/voedger/pkg/istructs"
 	"github.com/voedger/voedger/pkg/istructsmem"
 	"github.com/voedger/voedger/pkg/parser"
-	"github.com/voedger/voedger/pkg/sys"
-	"github.com/voedger/voedger/pkg/sys/smtp"
+	"github.com/voedger/voedger/pkg/sys/sysprovide"
 )
 
 func Provide() apps.AppBuilder {
 	return func(apis apps.APIs, cfg *istructsmem.AppConfigType, ep extensionpoints.IExtensionPoint) apps.BuiltInAppDef {
-		sysPackageFS := sys.Provide(cfg, smtp.Cfg{}, ep, nil, apis.TimeFunc, apis.ITokens, apis.IFederation, apis.IAppStructsProvider, apis.IAppTokensFactory,
-			nil, apis.IAppStorageProvider) // need to generate AppWorkspaces only
+		sysPackageFS := sysprovide.Provide(cfg) // need to generate AppWorkspaces only
 		blobberAppPackageFS := parser.PackageFS{
 			Path: BlobberAppFQN,
 			FS:   blobberSchemaFS,

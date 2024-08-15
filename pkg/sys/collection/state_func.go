@@ -12,11 +12,12 @@ import (
 	"github.com/voedger/voedger/pkg/istructs"
 	istructsmem "github.com/voedger/voedger/pkg/istructsmem"
 	"github.com/voedger/voedger/pkg/state"
+	"github.com/voedger/voedger/pkg/sys"
 	coreutils "github.com/voedger/voedger/pkg/utils"
 )
 
-func provideStateFunc(cfg *istructsmem.AppConfigType) {
-	cfg.Resources.Add(istructsmem.NewQueryFunction(
+func provideStateFunc(sr istructsmem.IStatelessResources) {
+	sr.AddQueries(appdef.SysPackagePath, istructsmem.NewQueryFunction(
 		qNameQueryState,
 		stateFuncExec))
 }
@@ -24,14 +25,14 @@ func provideStateFunc(cfg *istructsmem.AppConfigType) {
 func stateFuncExec(ctx context.Context, args istructs.ExecQueryArgs, callback istructs.ExecQueryCallback) (err error) {
 	after := args.ArgumentObject.AsInt64(field_After)
 
-	kb, err := args.State.KeyBuilder(state.View, QNameCollectionView)
+	kb, err := args.State.KeyBuilder(sys.Storage_View, QNameCollectionView)
 	if err != nil {
 		return err
 	}
 	kb.PutInt32(Field_PartKey, PartitionKeyCollection)
 
 	data := make(map[string]map[istructs.RecordID]map[string]interface{})
-	appDef := args.Workpiece.(interface{GetAppStructs() istructs.IAppStructs}).GetAppStructs().AppDef()
+	appDef := args.State.AppStructs().AppDef()
 	if err = args.State.Read(kb, func(key istructs.IKey, value istructs.IStateValue) (err error) {
 		if value.AsInt64(state.ColOffset) <= after {
 			return

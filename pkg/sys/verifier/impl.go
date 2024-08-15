@@ -19,7 +19,7 @@ import (
 	"github.com/voedger/voedger/pkg/istructsmem"
 	"github.com/voedger/voedger/pkg/itokens"
 	payloads "github.com/voedger/voedger/pkg/itokens-payloads"
-	"github.com/voedger/voedger/pkg/state"
+	"github.com/voedger/voedger/pkg/sys"
 	"github.com/voedger/voedger/pkg/sys/smtp"
 	coreutils "github.com/voedger/voedger/pkg/utils"
 	"github.com/voedger/voedger/pkg/utils/federation"
@@ -28,16 +28,12 @@ import (
 var translationsCatalog = coreutils.GetCatalogFromTranslations(translations)
 
 // called at targetApp/profileWSID
-func provideQryInitiateEmailVerification(cfg *istructsmem.AppConfigType, itokens itokens.ITokens,
+func provideQryInitiateEmailVerification(sr istructsmem.IStatelessResources, itokens itokens.ITokens,
 	asp istructs.IAppStructsProvider, federation federation.IFederation) {
-	cfg.Resources.Add(istructsmem.NewQueryFunction(
+	sr.AddQueries(appdef.SysPackagePath, istructsmem.NewQueryFunction(
 		QNameQueryInitiateEmailVerification,
 		provideIEVExec(itokens, federation, asp),
 	))
-	cfg.FunctionRateLimits.AddWorkspaceLimit(QNameQueryInitiateEmailVerification, istructs.RateLimit{
-		Period:                InitiateEmailVerification_Period,
-		MaxAllowedPerDuration: InitiateEmailVerification_MaxAllowed,
-	})
 }
 
 // q.sys.InitiateEmailVerification
@@ -51,7 +47,7 @@ func provideIEVExec(itokens itokens.ITokens, federation federation.IFederation, 
 		forRegistry := args.ArgumentObject.AsBool(field_ForRegistry)
 		lng := args.ArgumentObject.AsString(field_Language)
 
-		as := args.Workpiece.(interface{ GetAppStructs() istructs.IAppStructs }).GetAppStructs()
+		as := args.State.AppStructs()
 		appTokens := as.AppTokens()
 		if forRegistry {
 			// issue token for sys/registry/pseduoWSID. That's for c.sys.ResetPassword only for now
@@ -95,33 +91,33 @@ func applySendEmailVerificationCode(federation federation.IFederation, smtpCfg s
 		}
 		lng := event.ArgumentObject().AsString(field_Language)
 
-		kb, err := st.KeyBuilder(state.SendMail, appdef.NullQName)
+		kb, err := st.KeyBuilder(sys.Storage_SendMail, appdef.NullQName)
 		if err != nil {
 			return
 		}
 		reason := event.ArgumentObject().AsString(field_Reason)
 		translatedEmailSubject := message.NewPrinter(language.Make(lng), message.Catalog(translationsCatalog)).Sprintf(EmailSubject)
-		kb.PutString(state.Field_Subject, translatedEmailSubject)
-		kb.PutString(state.Field_To, event.ArgumentObject().AsString(Field_Email))
-		kb.PutString(state.Field_Body, getVerificationEmailBody(federation, event.ArgumentObject().AsString(field_VerificationCode), reason, language.Make(lng), translationsCatalog))
-		kb.PutString(state.Field_From, smtpCfg.GetFrom())
-		kb.PutString(state.Field_Host, smtpCfg.Host)
-		kb.PutInt32(state.Field_Port, smtpCfg.Port)
-		kb.PutString(state.Field_Username, smtpCfg.Username)
+		kb.PutString(sys.Storage_SendMail_Field_Subject, translatedEmailSubject)
+		kb.PutString(sys.Storage_SendMail_Field_To, event.ArgumentObject().AsString(Field_Email))
+		kb.PutString(sys.Storage_SendMail_Field_Body, getVerificationEmailBody(federation, event.ArgumentObject().AsString(field_VerificationCode), reason, language.Make(lng), translationsCatalog))
+		kb.PutString(sys.Storage_SendMail_Field_From, smtpCfg.GetFrom())
+		kb.PutString(sys.Storage_SendMail_Field_Host, smtpCfg.Host)
+		kb.PutInt32(sys.Storage_SendMail_Field_Port, smtpCfg.Port)
+		kb.PutString(sys.Storage_SendMail_Field_Username, smtpCfg.Username)
 		pwd := ""
 		if !coreutils.IsTest() {
-			kbSecret, err := st.KeyBuilder(state.AppSecret, appdef.NullQName)
+			kbSecret, err := st.KeyBuilder(sys.Storage_AppSecret, appdef.NullQName)
 			if err != nil {
 				return err
 			}
-			kbSecret.PutString(state.Field_Secret, smtpCfg.PwdSecret)
+			kbSecret.PutString(sys.Storage_AppSecretField_Secret, smtpCfg.PwdSecret)
 			sv, err := st.MustExist(kbSecret)
 			if err != nil {
 				return err
 			}
 			pwd = sv.AsString("")
 		}
-		kb.PutString(state.Field_Password, pwd)
+		kb.PutString(sys.Storage_SendMail_Field_Password, pwd)
 
 		_, err = intents.NewValue(kb)
 
@@ -138,29 +134,23 @@ func (r ivvtResult) AsString(string) string {
 }
 
 // called at targetApp/targetWSID
-func provideQryIssueVerifiedValueToken(cfg *istructsmem.AppConfigType, itokens itokens.ITokens, asp istructs.IAppStructsProvider) {
-	cfg.Resources.Add(istructsmem.NewQueryFunction(
+func provideQryIssueVerifiedValueToken(sr istructsmem.IStatelessResources, itokens itokens.ITokens, asp istructs.IAppStructsProvider) {
+	sr.AddQueries(appdef.SysPackagePath, istructsmem.NewQueryFunction(
 		QNameQueryIssueVerifiedValueToken,
-		provideIVVTExec(itokens, cfg.Name, asp),
+		provideIVVTExec(itokens, asp),
 	))
-
-	// code ok -> buckets state will be reset
-	cfg.FunctionRateLimits.AddWorkspaceLimit(QNameQueryIssueVerifiedValueToken, RateLimit_IssueVerifiedValueToken)
 }
 
 // q.sys.IssueVerifiedValueToken
 // called at targetApp/profileWSID
 // a helper is used for ResetPassword that calls `q.sys.IssueVerifiedValueToken` at the profile
-func provideIVVTExec(itokens itokens.ITokens, appQName appdef.AppQName, asp istructs.IAppStructsProvider) istructsmem.ExecQueryClosure {
+func provideIVVTExec(itokens itokens.ITokens, asp istructs.IAppStructsProvider) istructsmem.ExecQueryClosure {
 	return func(ctx context.Context, args istructs.ExecQueryArgs, callback istructs.ExecQueryCallback) (err error) {
 		verificationToken := args.ArgumentObject.AsString(field_VerificationToken)
 		verificationCode := args.ArgumentObject.AsString(field_VerificationCode)
 		forRegistry := args.ArgumentObject.AsBool(field_ForRegistry)
 
-		as, err := asp.BuiltIn(appQName)
-		if err != nil {
-			return err
-		}
+		as := args.State.AppStructs()
 
 		appTokens := as.AppTokens()
 		if forRegistry {
@@ -190,8 +180,8 @@ func provideIVVTExec(itokens itokens.ITokens, appQName appdef.AppQName, asp istr
 	}
 }
 
-func provideCmdSendEmailVerificationCode(cfg *istructsmem.AppConfigType) {
-	cfg.Resources.Add(istructsmem.NewCommandFunction(
+func provideCmdSendEmailVerificationCode(sr istructsmem.IStatelessResources) {
+	sr.AddCommands(appdef.SysPackagePath, istructsmem.NewCommandFunction(
 		QNameCommandSendEmailVerificationCode,
 		istructsmem.NullCommandExec,
 	))

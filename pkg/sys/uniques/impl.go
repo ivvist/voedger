@@ -14,6 +14,7 @@ import (
 	"net/http"
 
 	"github.com/voedger/voedger/pkg/goutils/iterate"
+	"github.com/voedger/voedger/pkg/sys"
 
 	"github.com/voedger/voedger/pkg/appdef"
 	"github.com/voedger/voedger/pkg/istructs"
@@ -22,25 +23,24 @@ import (
 	coreutils "github.com/voedger/voedger/pkg/utils"
 )
 
-func provideApplyUniques(appDef appdef.IAppDef) func(event istructs.IPLogEvent, state istructs.IState, intents istructs.IIntents) (err error) {
-	return func(event istructs.IPLogEvent, st istructs.IState, intents istructs.IIntents) (err error) {
-		return iterate.ForEachError(event.CUDs, func(rec istructs.ICUDRow) error {
-			iUniques, ok := appDef.Type(rec.QName()).(appdef.IUniques)
-			if !ok {
-				return nil
-			}
-			for _, unique := range iUniques.Uniques() {
-				if err := handleCUD(rec, st, intents, unique.Fields(), unique.Name()); err != nil {
-					return err
-				}
-			}
-			if iUniques.UniqueField() != nil {
-				uniqueQName := rec.QName()
-				return handleCUD(rec, st, intents, []appdef.IField{iUniques.UniqueField()}, uniqueQName)
-			}
+func applyUniques(event istructs.IPLogEvent, st istructs.IState, intents istructs.IIntents) (err error) {
+	return iterate.ForEachError(event.CUDs, func(rec istructs.ICUDRow) error {
+		appDef := st.AppStructs().AppDef()
+		iUniques, ok := appDef.Type(rec.QName()).(appdef.IUniques)
+		if !ok {
 			return nil
-		})
-	}
+		}
+		for _, unique := range iUniques.Uniques() {
+			if err := handleCUD(rec, st, intents, unique.Fields(), unique.Name()); err != nil {
+				return err
+			}
+		}
+		if iUniques.UniqueField() != nil {
+			uniqueQName := rec.QName()
+			return handleCUD(rec, st, intents, []appdef.IField{iUniques.UniqueField()}, uniqueQName)
+		}
+		return nil
+	})
 }
 
 func handleCUD(cud istructs.ICUDRow, st istructs.IState, intents istructs.IIntents, uniqueFields []appdef.IField, uniqueQName appdef.QName) error {
@@ -60,11 +60,11 @@ func update(st istructs.IState, rec istructs.ICUDRow, intents istructs.IIntents,
 	// so came here -> we're updating anything but unique fields
 	// let's check activation\deactivation
 
-	kb, err := st.KeyBuilder(qnameRecordStorage, rec.QName())
+	kb, err := st.KeyBuilder(sys.Storage_Record, rec.QName())
 	if err != nil {
 		return err
 	}
-	kb.PutRecordID(field_RecordID, rec.ID())
+	kb.PutRecordID(sys.Storage_Record_Field_ID, rec.ID())
 	currentRecord, err := st.MustExist(kb)
 	if err != nil {
 		return err
@@ -133,7 +133,7 @@ func getUniqueViewRecord(st istructs.IState, rec istructs.IRowReader, uniqueFiel
 	if err != nil {
 		return nil, nil, false, err
 	}
-	uniqueViewRecordBuilder, err := st.KeyBuilder(qnameViewStorage, qNameViewUniques)
+	uniqueViewRecordBuilder, err := st.KeyBuilder(sys.Storage_View, qNameViewUniques)
 	if err != nil {
 		// notest
 		return nil, nil, false, err
