@@ -14,19 +14,12 @@ TAG PosTag;
 -- TABLE BOEntity : is an Abstract base data struct for many CDOC tables
 ABSTRACT TABLE BOEntity INHERITS CDoc( 
     Name varchar(50) NOT NULL, -- TODO NOT NULL everywhere
-    Number int NOT NULL -- Number sequence(1) ??? smm
+    Number int NOT NULL -- Number sequence(1) smm
 ) WITH Tags=(BackofficeTag);
 
 WORKSPACE Restaurant (
+    DESCRIPTOR RestaurantDescriptor();
     USE TABLE sys.*;
-    DESCRIPTOR RestaurantDescriptor(
-	    Address varchar(50),
-	    Currency varchar(3),
-	    Phone varchar(20),
-	    OpenHours    int,
-	    OpenMinutes  int,
-	    OwnerName varchar(30)
-    );
 
     ROLE LocationUser;
     ROLE LocationManager;
@@ -128,14 +121,14 @@ WORKSPACE Restaurant (
        	AuthorID ref(POSUser) NOT NULL,
         RegisterID ref(Register) NOT NULL,
         -- bill number, unique per cash register   
-        Number int, ??  -- how to provide uniqueness
+        Number int, -- how to provide uniqueness
         -- time of Bill creating
         PayTimeStamp timestamp,
         Tips currency,
         -- TABLE PaymentItem  : Defines set of payment methods related to bill
         PaymentTypeID ref(PaymentType) NOT NULL,
         -- amount of payment
-        Amount currency
+        Amount currency,
         PaymentItem TABLE PaymentItem (
             PaymentID ref(Payment) NOT NULL,
             ArticleID ref(Article), 
