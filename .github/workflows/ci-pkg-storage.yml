@@ -21,19 +21,29 @@ jobs:
       - name: Check modified files
         id: filter
         run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          # Ensure we have a valid previous commit
+          BEFORE_COMMIT=${{ github.event.before }}
+          if [ -z "$BEFORE_COMMIT" ] || ! git cat-file -e "$BEFORE_COMMIT^{commit}" 2>/dev/null; then
+            BEFORE_COMMIT=$(git rev-parse HEAD~1)  # Use previous commit if before is invalid
+          fi
+
+          CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT ${{ github.sha }})
           echo "Changed files: $CHANGED_FILES"
 
+          # Set environment variables
+          CAS=false
+          AMAZON=false
+
           if echo "$CHANGED_FILES" | grep -q '^pkg/istorage/cas/'; then
-            echo "cas=true" >> $GITHUB_ENV
+            CAS=true
           fi
 
           if echo "$CHANGED_FILES" | grep -q '^pkg/istorage/amazondb/'; then
-            echo "amazon=true" >> $GITHUB_ENV
+            AMAZON=true
           fi
 
-          echo "cas=${{ env.cas }}" >> $GITHUB_OUTPUT
-          echo "amazon=${{ env.amazon }}" >> $GITHUB_OUTPUT
+          echo "cas=$CAS" >> $GITHUB_ENV
+          echo "amazon=$AMAZON" >> $GITHUB_ENV
 
   trigger_cas:
     needs: determine_changes
