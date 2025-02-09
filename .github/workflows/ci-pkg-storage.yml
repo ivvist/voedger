@@ -27,7 +27,6 @@ jobs:
         run: |
           CAS_CHANGED=false
           AMAZON_CHANGED=false
-          OTHERS_CHANGED=false
 
           # Ensure we have a valid previous commit
           if git rev-parse HEAD^ >/dev/null 2>&1; then
@@ -43,10 +42,12 @@ jobs:
           OTHERS_CHANGED=true
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/cas/"; then
             CAS_CHANGED=true
+            OTHERS_CHANGED=false
           fi
 
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/amazondb/"; then
             AMAZON_CHANGED=true
+            OTHERS_CHANGED=false
           fi
 
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/bbolt/"; then
@@ -62,7 +63,6 @@ jobs:
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
           echo "others_changed=$OTHERS_CHANGED" >> $GITHUB_OUTPUT
-          echo "other: $OTHERS_CHANGED"
 
   trigger_cas:
     needs: determine_changes
