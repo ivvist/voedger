@@ -11,13 +11,15 @@ on:
 jobs:
 
   determine_changes:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       cas_changed: ${{ steps.filter.outputs.cas_changed }}
       amazon_changed: ${{ steps.filter.outputs.amazon_changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Ensure we have history for comparison
 
       - name: Check changed files
         id: filter
@@ -25,15 +27,21 @@ jobs:
           CAS_CHANGED=false
           AMAZON_CHANGED=false
 
-          # Get the list of changed files
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          # Ensure we have a valid previous commit
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            BEFORE_COMMIT=HEAD^
+          else
+            BEFORE_COMMIT=HEAD  # In case it's the first commit
+          fi
 
-          # Check if files in pkg/istorage/cas/ were changed
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT HEAD)
+
+          # Check if files were changed in respective folders
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/cas/"; then
             CAS_CHANGED=true
           fi
 
-          # Check if files in pkg/istorage/amazondb/ were changed
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/amazondb/"; then
             AMAZON_CHANGED=true
           fi
