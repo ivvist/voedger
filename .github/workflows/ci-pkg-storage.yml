@@ -48,6 +48,9 @@ jobs:
 
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
+          echo "cas? $CAS_CHANGED"
+          echo "amazon? $AMAZON_CHANGED"
+
 
   trigger_cas:
     needs: determine_changes
