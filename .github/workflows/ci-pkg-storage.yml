@@ -19,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Ensure we have history for comparison
+          fetch-depth: 2  # Ensure we have commit history for comparison
 
       - name: Check changed files
         id: filter
@@ -38,19 +38,16 @@ jobs:
           CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT HEAD)
 
           # Check if files were changed in respective folders
-          if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/cas/"; then
+          if echo "$CHANGED_FILES" | grep -qE "^pkg/istorage/cas/|^pkg/istorage/file[1-3]$"; then
             CAS_CHANGED=true
           fi
 
-          if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/amazondb/"; then
+          if echo "$CHANGED_FILES" | grep -qE "^pkg/istorage/amazondb/|^pkg/istorage/file[1-3]$"; then
             AMAZON_CHANGED=true
           fi
 
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
-          echo "cas? $CAS_CHANGED"
-          echo "amazon? $AMAZON_CHANGED"
-
 
   trigger_cas:
     needs: determine_changes
