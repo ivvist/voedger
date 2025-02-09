@@ -35,7 +35,7 @@ jobs:
           fi
 
           # Get changed files
-          CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT HEAD)
+          CHANGED_FILES=$(git log -m -1 --name-only --pretty=format: HEAD)
 
           # Check if files were changed in respective folders
           if echo "$CHANGED_FILES" | grep -qE "^pkg/istorage/cas/|^pkg/istorage/file[1-3]$"; then
