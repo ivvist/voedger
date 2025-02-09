@@ -15,6 +15,7 @@ jobs:
     outputs:
       cas_changed: ${{ steps.filter.outputs.cas_changed }}
       amazon_changed: ${{ steps.filter.outputs.amazon_changed }}
+      others_changed: ${{ steps.filter.outputs.others_changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,6 +27,7 @@ jobs:
         run: |
           CAS_CHANGED=false
           AMAZON_CHANGED=false
+          OTHERS_CHANGED=false
 
           # Ensure we have a valid previous commit
           if git rev-parse HEAD^ >/dev/null 2>&1; then
@@ -46,19 +48,25 @@ jobs:
             AMAZON_CHANGED=true
           fi
 
+          OTHERS_CHANGED=true
+          if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/bbolt/" | grep -q "^pkg/istorage/mem/" grep -q "^pkg/istorage/provider/"; then
+            OTHERS_CHANGED=false
+          fi
+          
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
+          echo "others_changed=$OTHERS_CHANGED  >> $GITHUB_OUTPUT
 
   trigger_cas:
     needs: determine_changes
-    if: (needs.determine_changes.outputs.cas_changed == 'true') || (needs.determine_changes.outputs.amazon_changed != 'true')
+    if: (needs.determine_changes.outputs.cas_changed == 'true') || (needs.determine_changes.outputs.amazon_changed != 'true') || (needs.determine_changes.outputs.others_changed != 'true') 
     uses: ./.github/workflows/ci_cas.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
   trigger_amazon:
     needs: determine_changes
-    if: (needs.determine_changes.outputs.amazon_changed == 'true') || (needs.determine_changes.outputs.cas_changed != 'true')
+    if: (needs.determine_changes.outputs.amazon_changed == 'true') || (needs.determine_changes.outputs.cas_changed != 'true') || (needs.determine_changes.outputs.others_changed != 'true') 
     uses: ./.github/workflows/ci_amazon.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
