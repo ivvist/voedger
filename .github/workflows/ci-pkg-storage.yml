@@ -38,13 +38,13 @@ jobs:
   trigger_cas:
     needs: determine_changes
     if: needs.determine_changes.outputs.cas_changed == 'true'
-    uses: ./.github/workflows/ci_cas.yaml
+    uses: ./.github/workflows/ci_cas.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
   trigger_amazon:
     needs: determine_changes
     if: needs.determine_changes.outputs.amazon_changed == 'true'
-    uses: ./.github/workflows/ci_amazon.yaml
+    uses: ./.github/workflows/ci_amazon.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
