@@ -4,17 +4,9 @@ on:
   push:
     paths:
       - 'pkg/istorage/**'
-    paths-ignore:
-      - 'pkg/istorage/bbolt/**'
-      - 'pkg/istorage/mem/**'
-      - 'pkg/istorage/provider/**'
   pull_request:
     paths:
       - 'pkg/istorage/**'
-    paths-ignore:
-      - 'pkg/istorage/bbolt/**'
-      - 'pkg/istorage/mem/**'
-      - 'pkg/istorage/provider/**'
 
 jobs:
 
