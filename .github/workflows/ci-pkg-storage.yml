@@ -56,16 +56,17 @@ jobs:
 
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
+
   trigger_cas:
     needs: determine_changes
-    if: needs.determine_changes.outputs.cas_changed == 'true'
+    if: (needs.determine_changes.outputs.cas_changed == 'true') || (needs.determine_changes.outputs.amazon_changed != 'true')
     uses: ./.github/workflows/ci_cas.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
   trigger_amazon:
     needs: determine_changes
-    if: needs.determine_changes.outputs.amazon_changed == 'true'
+    if: (needs.determine_changes.outputs.amazon_changed == 'true') || (needs.determine_changes.outputs.cas_changed != 'true')
     uses: ./.github/workflows/ci_amazon.yml
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
