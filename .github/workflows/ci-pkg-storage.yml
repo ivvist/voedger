@@ -40,6 +40,7 @@ jobs:
           CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT HEAD)
 
           # Check if files were changed in respective folders
+          OTHERS_CHANGED=true
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/cas/"; then
             CAS_CHANGED=true
           fi
@@ -48,7 +49,6 @@ jobs:
             AMAZON_CHANGED=true
           fi
 
-          OTHERS_CHANGED=true
           if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/bbolt/"; then
             OTHERS_CHANGED=false
           fi
@@ -62,6 +62,7 @@ jobs:
           echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
           echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
           echo "others_changed=$OTHERS_CHANGED" >> $GITHUB_OUTPUT
+          echo "other: $OTHERS_CHANGED"
 
   trigger_cas:
     needs: determine_changes
