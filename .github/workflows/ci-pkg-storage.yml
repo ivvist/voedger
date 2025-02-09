@@ -21,16 +21,27 @@ jobs:
       - name: Check modified files
         id: filter
         run: |
-          # Ensure we have a valid previous commit
+          # Determine the previous commit
           BEFORE_COMMIT=${{ github.event.before }}
+
+          # If BEFORE_COMMIT is empty or invalid, use the first parent commit as fallback
           if [ -z "$BEFORE_COMMIT" ] || ! git cat-file -e "$BEFORE_COMMIT^{commit}" 2>/dev/null; then
-            BEFORE_COMMIT=$(git rev-parse HEAD~1)  # Use previous commit if before is invalid
+            BEFORE_COMMIT=$(git rev-parse --verify HEAD~1 2>/dev/null || echo "")
           fi
 
+          # If still empty, it means this is the first commit (e.g., brand-new repo or first push)
+          if [ -z "$BEFORE_COMMIT" ]; then
+            echo "No previous commit found. Using HEAD."
+            BEFORE_COMMIT=${{ github.sha }}
+          fi
+
+          echo "Comparing changes from $BEFORE_COMMIT to ${{ github.sha }}"
+
+          # Get changed files
           CHANGED_FILES=$(git diff --name-only $BEFORE_COMMIT ${{ github.sha }})
           echo "Changed files: $CHANGED_FILES"
 
-          # Set environment variables
+          # Check for relevant file changes
           CAS=false
           AMAZON=false
 
@@ -44,6 +55,9 @@ jobs:
 
           echo "cas=$CAS" >> $GITHUB_ENV
           echo "amazon=$AMAZON" >> $GITHUB_ENV
+
+          echo "cas=$CAS" >> $GITHUB_OUTPUT
+          echo "amazon=$AMAZON" >> $GITHUB_OUTPUT
 
   trigger_cas:
     needs: determine_changes
