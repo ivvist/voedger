@@ -1,0 +1,56 @@
+name: CI changes in pkg/istorage
+
+on:
+  push:
+    paths:
+      - 'pkg/istorage/**'
+  pull_request:
+    paths:
+      - 'pkg/istorage/**'
+
+jobs:
+
+  determine_changes:
+    runs-on: ubuntu-22.04
+    outputs:
+      cas_changed: ${{ steps.filter.outputs.cas_changed }}
+      amazon_changed: ${{ steps.filter.outputs.amazon_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check changed files
+        id: filter
+        run: |
+          CAS_CHANGED=false
+          AMAZON_CHANGED=false
+
+          # Get the list of changed files
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+
+          # Check if files in pkg/istorage/cas/ were changed
+          if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/cas/"; then
+            CAS_CHANGED=true
+          fi
+
+          # Check if files in pkg/istorage/amazondb/ were changed
+          if echo "$CHANGED_FILES" | grep -q "^pkg/istorage/amazondb/"; then
+            AMAZON_CHANGED=true
+          fi
+
+          echo "cas_changed=$CAS_CHANGED" >> $GITHUB_OUTPUT
+          echo "amazon_changed=$AMAZON_CHANGED" >> $GITHUB_OUTPUT
+
+  trigger_cas:
+    needs: determine_changes
+    if: needs.determine_changes.outputs.cas_changed == 'true'
+    uses: ./.github/workflows/ci_cas.yaml
+    secrets:
+      personaltoken: ${{ secrets.REPOREADING_TOKEN }}
+
+  trigger_amazon:
+    needs: determine_changes
+    if: needs.determine_changes.outputs.amazon_changed == 'true'
+    uses: ./.github/workflows/ci_amazon.yaml
+    secrets:
+      personaltoken: ${{ secrets.REPOREADING_TOKEN }}

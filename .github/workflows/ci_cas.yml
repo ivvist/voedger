@@ -1,12 +1,17 @@
 name: Run Cassandra Tests
 
 on:
-  push:
-    paths:
-      - 'pkg/istorage/cas/**'
-  pull_request:
-    paths:
-      - 'pkg/istorage/cas/**'
+  workflow_call:
+    secrets:
+      personaltoken:
+        required: true
+#on:
+#  push:
+#    paths:
+#      - 'pkg/istorage/cas/**'
+#  pull_request:
+#    paths:
+#      - 'pkg/istorage/cas/**'
 
 jobs:
 
@@ -62,4 +67,4 @@ jobs:
       body: ${{ needs.build.outputs.failure_url }}
       label: 'prty/blocker'
     secrets:
-      personaltoken: ${{ secrets.PERSONAL_TOKEN }}  # Match with `workflow_call`
+      personaltoken: ${{ secrets.personaltoken }}  # Match with `workflow_call`
