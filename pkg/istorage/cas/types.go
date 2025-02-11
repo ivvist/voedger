@@ -39,3 +39,7 @@ func (p CassandraParamsType) cqlVersion() string {
 
 
 
+
+
+
+
