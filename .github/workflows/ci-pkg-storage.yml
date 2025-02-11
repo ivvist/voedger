@@ -79,34 +79,17 @@ jobs:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
 
-  test-data:
-    runs-on: ubuntu-latest
-    needs: [trigger_cas, trigger_amazon]
-    if: |
-      needs.trigger_amazon.result == 'success' || 
-      needs.trigger_cas.result == 'success' || 
-      needs.trigger_cas.result == 'skipped' || 
-      needs.trigger_amazon.result == 'skipped'
-    steps:
-    - name: Debug dependencies
-      run: |
-        echo "trigger_amazon: ${{ needs.trigger_amazon.result }}"
-        echo "trigger_cas: ${{ needs.trigger_cas.result }}"
-
-
-
-
   auto-merge-pr-amazon:
     needs: [trigger_amazon]
-    if: ${{ github.event_name == 'pull_request' && needs.trigger_amazon.result == 'success' }}
+    if: ${{ github.event_name == 'pull_request' && needs.trigger_amazon.result == 'success'  }}
     uses: ./.github/workflows/merge.yml
     secrets:
       personaltoken: ${{ secrets.PERSONAL_TOKEN }}
 
 
   auto-merge-pr-cas:
-    needs: [trigger_cas, trigger_amazon]
-    if: ${{ github.event_name == 'pull_request' && needs.trigger_cas.result == 'success' && needs.trigger_amazon.result == 'skipped'}}
+    needs: [trigger_cas]
+    if: ${{ github.event_name == 'pull_request' && needs.trigger_cas.result == 'success'}}
     uses: ./.github/workflows/merge.yml
     secrets:
       personaltoken: ${{ secrets.PERSONAL_TOKEN }}
