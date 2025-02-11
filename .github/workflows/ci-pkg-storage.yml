@@ -81,6 +81,7 @@ jobs:
 
   test-data:
     runs-on: ubuntu-latest
+    needs: [trigger_cas, trigger_amazon]
     steps:
     - name: Debug dependencies
       run: |
