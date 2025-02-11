@@ -82,11 +82,10 @@ jobs:
   test-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug job results
+    - name: Debug dependencies
       run: |
-        echo "Trigger Amazon result: ${{ needs.trigger_amazon.result }}"
-        echo "Trigger CAS result: ${{ needs.trigger_cas.result }}"
-
+        echo "trigger_amazon: ${{ needs.trigger_amazon.result }}"
+        echo "trigger_cas: ${{ needs.trigger_cas.result }}"
 
 
 
