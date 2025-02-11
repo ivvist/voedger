@@ -78,12 +78,26 @@ jobs:
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
+
+  test-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug job results
+      run: |
+        echo "Trigger Amazon result: ${{ needs.trigger_amazon.result }}"
+        echo "Trigger CAS result: ${{ needs.trigger_cas.result }}"
+
+
+
+
+
   auto-merge-pr-amazon:
     needs: [trigger_amazon]
     if: ${{ github.event_name == 'pull_request' && needs.trigger_amazon.result == 'success' }}
     uses: ./.github/workflows/merge.yml
     secrets:
       personaltoken: ${{ secrets.PERSONAL_TOKEN }}
+
 
   auto-merge-pr-cas:
     needs: [trigger_cas, trigger_amazon]
