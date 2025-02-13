@@ -71,7 +71,7 @@ jobs:
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
-  determine_changes:
+  print_event:
     runs-on: ubuntu-latest
     steps:
       - name: Check changed files
