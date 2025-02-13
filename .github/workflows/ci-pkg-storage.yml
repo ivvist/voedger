@@ -71,6 +71,14 @@ jobs:
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
+  determine_changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check changed files
+        id: filter
+        run: |
+          echo ${{ github.event_name }}
+
   trigger_amazon:
     needs: determine_changes
     if: (needs.determine_changes.outputs.amazon_changed == 'true') || (needs.determine_changes.outputs.others_changed == 'true') 
