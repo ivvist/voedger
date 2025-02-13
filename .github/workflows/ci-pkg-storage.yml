@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'pkg/istorage/**'
-  pull_request:
+  pull_request_target:
     paths:
       - 'pkg/istorage/**'
 
@@ -71,6 +71,14 @@ jobs:
     secrets:
       personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
+  print_event:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check changed files
+        id: filter
+        run: |
+          echo ${{ github.event_name }}
+
   trigger_amazon:
     needs: determine_changes
     if: (needs.determine_changes.outputs.amazon_changed == 'true') || (needs.determine_changes.outputs.others_changed == 'true') 
@@ -80,15 +88,15 @@ jobs:
 
   auto-merge-pr-amazon:
     needs: [trigger_amazon]
-    if: ${{ github.event_name == 'pull_request' && needs.trigger_amazon.result == 'success' }}
+    if: ${{ github.event_name == 'pull_request_target'  }}
     uses: ./.github/workflows/merge.yml
     secrets:
-      personaltoken: ${{ secrets.PERSONAL_TOKEN }}
+      personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
   auto-merge-pr-cas:
-    needs: [trigger_cas, trigger_amazon]
-    if: ${{ github.event_name == 'pull_request' && needs.trigger_cas.result == 'success' && needs.trigger_amazon.result == 'skipped'}}
+    needs: [trigger_cas]
+    if: ${{ github.event_name == 'pull_request_target'}}
     uses: ./.github/workflows/merge.yml
     secrets:
-      personaltoken: ${{ secrets.PERSONAL_TOKEN }}
+      personaltoken: ${{ secrets.REPOREADING_TOKEN }}
 
